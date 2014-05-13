@@ -1,0 +1,12 @@
+{application, hzerl,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { hzerl_app, []}},
+  {env, [{jar_start, "java -jar ../target/hz.jar "}]}
+ ]}.
