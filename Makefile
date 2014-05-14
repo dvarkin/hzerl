@@ -3,18 +3,18 @@ LEIN  := tools/lein
 
 .PHONY: deps
 
-all: hzerl-deps hzerl-compile erl-deps erl-compile
+all: hzerl-deps clj erl-deps erl
 
 erl-deps:
 	$(REBAR) get-deps
 
-erl-compile: 
+erl: 
 	$(REBAR) compile	
 
 hzerl-deps:
 	$(LEIN) deps
 
-hzerl-compile:
+clj:
 	$(LEIN) uberjar
 
 clean: erl-clean hzerl-clean

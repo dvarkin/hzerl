@@ -1,7 +1,8 @@
 (ns hzerl.core
+  (:require [environ.core :refer (env)])
   (:gen-class))
 
 (defn -main 
   "main fun"
   [& args]
-  (println args "Hello, World!"))
+  (println "erlang node" (:erlang-node env)))
