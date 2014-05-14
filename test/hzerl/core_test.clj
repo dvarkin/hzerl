@@ -2,6 +2,6 @@
   (:require [clojure.test :refer :all]
             [hzerl.core :refer :all]))
 
-(deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+(deftest maek-node-name-test
+  (testing "fix making node name"
+    (is (= "hzerlnode@localhost" (make-node-name "someerlangnodename@localhost")))))

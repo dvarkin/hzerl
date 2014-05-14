@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, cmd/1, reload/0, stop/0]).
+-export([start_link/0, cmd/1, reload/0, stop/0, state/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -20,7 +20,7 @@
 -define(SERVER, ?MODULE).
 -define(JAR_PATH, "/Users/dem/projecs/hzerl/target/hz.jar").
 
--record(state, {port, cmd, node_drv}).
+-record(state, {port, cmd, hzerl_node, hzerl_mbox}).
 
 %%%===================================================================
 %%% API
@@ -31,6 +31,9 @@ reload() ->
 	
 cmd(Cmd) ->
 	gen_server:cast(?SERVER, {cmd, Cmd}).
+
+state() ->
+	gen_server:call(?SERVER, state).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -62,8 +65,10 @@ stop() ->
 %% @end
 %%--------------------------------------------------------------------
 init([JarPath]) ->
+	{registered_name, SelfName} = erlang:process_info(self(), registered_name),
 	Node = string:join(["-Derlang.node=", atom_to_list(node())], ""),
-	Cmd = string:join(["java -jar", Node, JarPath], " "),
+	Mbox = string:join(["-Derlang.mbox=", atom_to_list(SelfName)], ""),
+	Cmd = string:join(["java -jar", Mbox, Node, JarPath], " "),
 	io:format("start jar: ~s~n", [Cmd]),
 	Port = open_port({spawn, Cmd}, [binary, eof]),
 	{ok, #state{port = Port, cmd = Cmd}}.
@@ -82,6 +87,10 @@ init([JarPath]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_call(state, _From, State) ->
+	Reply = State,
+	{reply, Reply, State};
+
 handle_call(_Request, _From, State) ->
 	Reply = ok,
 	{reply, Reply, State}.
@@ -96,12 +105,13 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(stop, State) ->
+handle_cast(stop, #state{port = Port} = State) ->
+	port_close(Port),
 	io:format("close driver~n"),
 	{stop, normal, State};
-handle_cast({cmd, Cmd}, #state{node_drv = Node} = State) ->
+handle_cast({cmd, Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
 	io:format("send to HZ ~p~n", [Cmd]),
-	Node ! Cmd,
+	{Mbox, Node} ! Cmd,
 	{noreply, State};
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -122,6 +132,10 @@ handle_info({Port, eof}, #state{port = Port} = State) ->
 handle_info({Port, {data, Data}}, #state{port = Port} = State) ->
 	io:format("data from port driver: ~p", [Data]),
 	{noreply, State};
+handle_info({hzerl_node, Node}, State) ->
+	{noreply, State#state{hzerl_node = Node}};
+handle_info({hzerl_mbox, Mbox}, State) ->
+	{noreply, State#state{hzerl_mbox = Mbox}};
 handle_info(_Info, State) ->
 	io:format("info in ctrl: ~p", [_Info]),
 	{noreply, State}.
