@@ -105,7 +105,8 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(stop, #state{port = Port} = State) ->
+handle_cast(stop, #state{port = Port, hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
+	{Mbox, Node} ! stop,
 	port_close(Port),
 	io:format("close driver~n"),
 	{stop, normal, State};

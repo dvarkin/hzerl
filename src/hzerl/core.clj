@@ -18,8 +18,8 @@
 
 (defn echo-handler
   [erl-mbox erl-node self]
-  (send! self erl-mbox erl-node [:hzerl_node (:name self)])
-  (send! self erl-mbox erl-node [:hzerl_mbox self-mbox])
+  (send! self erl-mbox erl-node [:hzerl_node (keyword (:name self))])
+  (send! self erl-mbox erl-node [:hzerl_mbox (keyword self-mbox)])
   (loop [n true]
     (let [message  (recv self)]
       (when-not (= :stop message)
