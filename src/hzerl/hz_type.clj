@@ -19,7 +19,7 @@
 (extend-protocol MapProtocol
   ClientMapProxy
   (GET [this key] (.get this key))
-  (PUT
+  (SET
     ([this key value] (.put this key value))
     ([this key value expire] (.put this key value expire TimeUnit/MILLISECONDS)))
   (DEL

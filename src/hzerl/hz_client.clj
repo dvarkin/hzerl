@@ -73,38 +73,8 @@
   (when expr
     (nippy/thaw expr)))
 
-
 (defn cmd
   [^HazelcastInstance conn ^Keyword hz-type ^String name hz-cmd & args]
   (case hz-type 
     :map (apply hz-cmd  (conj args (.getMap conn name)))
     [:info "indefined type" hz-type name args]))
-
-(defn mput
-  [conn map-name key value]
-  (->
-   conn
-   (.getMap map-name)
-   (.put key value)))
-
-(defn mput-expire
-  [conn map-name key value expire]
-  (->
-   conn
-   (.getMap map-name)
-   (.put key value expire TimeUnit/MILLISECONDS)))
-
-(defn mget
-  [conn map-name key]
-  (->
-   conn
-   (.getMap  map-name)
-   (.get key)))
-
-(defn mclear
-  [conn map-name]
-  (->
-   conn
-   (.getMap map-name)
-   (.clear)))
-
