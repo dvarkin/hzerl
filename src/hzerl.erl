@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, cmd/1, reload/0, stop/0, state/0]).
+-export([start_link/0, cmd/1, reload/0, stop/0, state/0, connect/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -48,6 +48,22 @@ start_link(JarPath) ->
 
 stop() ->
 	gen_server:cast(?SERVER, stop).
+
+%%--------------------------------------------------------------------
+%% @doc Config = {user, UserName,
+%%                password, UserPassword,
+%%                hosts, ["localhost", "10.1.1.1"]
+%%                connAtemptLimit, 5 , %% unlimited by default
+%%                connAtemptPeriod, 3000,
+%%                connTimeout, 5000}
+%% @spec
+%% @end
+%%--------------------------------------------------------------------
+
+connect(Config) when is_tuple(Config) ->
+	?MODULE:cmd({cmd, connect, config, Config});
+connect(Config) ->
+	{error, {"not a tuple", Config}}.
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -105,11 +121,12 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(stop, #state{port = Port, hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
-	{Mbox, Node} ! stop,
-	port_close(Port),
-	io:format("close driver~n"),
-	{stop, normal, State};
+handle_cast(stop, #state{port = _Port, hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
+	{Mbox, Node} ! {cmd, stop},
+%	port_close(Port),
+	io:format("try to close driver~n"),
+	{noreply, State};
+
 handle_cast({cmd, Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
 	io:format("send to HZ ~p~n", [Cmd]),
 	{Mbox, Node} ! Cmd,
