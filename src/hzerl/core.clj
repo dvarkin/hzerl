@@ -65,7 +65,6 @@
                             (do
                               (println (.getMessage e))
                               hz-handler)))]
-        (println "recv: " pid message feedback)
         (recur feedback))))
   (System/exit 0))
 
