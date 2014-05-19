@@ -11,13 +11,14 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, cmd/1, reload/0, stop/0, state/0, connect/1]).
+-export([start_link/0, cmd_sync/1, cmd_async/1, reload/0, stop/0, state/0, connect/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 		 terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE).
+-define(JREQ(Method, Pid, Cmd), {method, Method, pid, Pid, hzcmd, Cmd}).
 -define(JAR_PATH, "/Users/dem/projecs/hzerl/target/hz.jar").
 
 -record(state, {port, cmd, hzerl_node, hzerl_mbox}).
@@ -29,11 +30,18 @@ reload() ->
 	code:purge(?MODULE),
 	code:load_file(?MODULE).
 	
-cmd(Cmd) ->
+cmd_async(Cmd) ->
 	gen_server:cast(?SERVER, {cmd, Cmd}).
+
+cmd_sync(Cmd) ->
+	gen_server:call(?SERVER, {cmd, Cmd}).
 
 state() ->
 	gen_server:call(?SERVER, state).
+
+stop() ->
+	?MODULE:async_cmd(?SERVER, {cmd, stop}).
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -46,8 +54,6 @@ start_link() ->
 start_link(JarPath) ->
 	gen_server:start_link({local, ?SERVER}, ?MODULE, [JarPath], []).
 
-stop() ->
-	gen_server:cast(?SERVER, stop).
 
 %%--------------------------------------------------------------------
 %% @doc Config = {user, UserName,
@@ -61,7 +67,7 @@ stop() ->
 %%--------------------------------------------------------------------
 
 connect(Config) when is_tuple(Config) ->
-	?MODULE:cmd({cmd, connect, config, Config});
+	?MODULE:cmd_sync({cmd, connect, config, Config});
 connect(Config) ->
 	{error, {"not a tuple", Config}}.
 
@@ -103,10 +109,24 @@ init([JarPath]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_call({cmd, Cmd}, From, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
+	Fn = fun() ->
+				 {Mbox, Node} ! ?JREQ(sync, self(), Cmd),
+				 receive
+					 Response ->
+						 Reply = Response,
+						 io:format("sync resp: ~p~n", [Reply]),
+						 gen_server:reply(From, Reply)
+				 after 5000 ->
+						 gen_server:reply(From, timeout)
+				 end
+		 end,
+	spawn(Fn),
+	{noreply,State};
+
 handle_call(state, _From, State) ->
 	Reply = State,
 	{reply, Reply, State};
-
 handle_call(_Request, _From, State) ->
 	Reply = ok,
 	{reply, Reply, State}.
@@ -121,15 +141,10 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(stop, #state{port = _Port, hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
-	{Mbox, Node} ! {cmd, stop},
-%	port_close(Port),
-	io:format("try to close driver~n"),
-	{noreply, State};
 
 handle_cast({cmd, Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
 	io:format("send to HZ ~p~n", [Cmd]),
-	{Mbox, Node} ! Cmd,
+	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
 	{noreply, State};
 handle_cast(_Msg, State) ->
 	{noreply, State}.

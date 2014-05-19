@@ -39,13 +39,16 @@
   [^String erl-mbox ^String erl-node self]
   (send! self erl-mbox erl-node [:hzerl_node (keyword (:name self))])
   (send! self erl-mbox erl-node [:hzerl_mbox (keyword self-mbox)])
-  (println "exti from loop"
+  (println "exit from loop"
    (loop [n true]
-     (let [message  (->> (recv self)
-                         vec-to-map)]
-       (when-let [feedback (commands message)]
+     (let [message  (->>
+                     (recv self)
+                     vec-to-map)
+           pid (:pid message)]
+       (println "recv: " pid message)
+       (when-let [feedback (commands (vec-to-map (:hzcmd message)))]
          (println "feed" feedback)
-         (send! self erl-mbox erl-node feedback)
+         (send! self pid feedback)
          (recur true))))
    (System/exit 0)))
 
