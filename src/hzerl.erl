@@ -11,7 +11,15 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, cmd_sync/1, cmd_async/1, reload/0, stop/0, state/0, connect/1]).
+-export([start_link/0,
+		 cmd_sync/1,
+		 cmd_async/1,
+		 hz_cast/1,
+		 hz_call/1,
+		 reload/0,
+		 stop/0,
+		 state/0,
+		 connect/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -29,7 +37,12 @@
 reload() ->
 	code:purge(?MODULE),
 	code:load_file(?MODULE).
-	
+
+hz_call(Cmd) ->
+	?MODULE:cmd_sync({cmd, hz, args, Cmd}).
+hz_cast(Cmd) ->
+	?MODULE:cmd_async({cmd, hz, args, Cmd}).
+
 cmd_async(Cmd) ->
 	gen_server:cast(?SERVER, {cmd, Cmd}).
 
@@ -40,7 +53,7 @@ state() ->
 	gen_server:call(?SERVER, state).
 
 stop() ->
-	?MODULE:async_cmd(?SERVER, {cmd, stop}).
+	?MODULE:cmd_async({cmd, stop}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -142,6 +155,10 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
+%%handle_cast({cmd, {cmd, stop} = Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
+%% 	io:format("STOP HZ ~p~n", [Cmd]),
+%% 	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
+%% 	{stop, normal, State};
 handle_cast({cmd, Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
 	io:format("send to HZ ~p~n", [Cmd]),
 	{Mbox, Node} ! ?JREQ(async, self(), Cmd),

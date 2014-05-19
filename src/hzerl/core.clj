@@ -27,30 +27,47 @@
     (apply hash-map message)
     message))
 
+(defn hz-connect
+  [send-fn config]
+  (println config)
+  (let [conn (hz-client/connect config)]
+    (send-fn conn)
+    (partial hz-client/cmd conn)))
+
+(defn hz-cmd
+  [send-fn handler args]
+  (->> (apply handler args)
+       send-fn)
+  handler)
+
 (defn commands
-  [message]
+  [hz-handler send-fn message]
   (case (:cmd message)
-    :stop nil
-    :connect (hz-client/connect (:config message))
-    [:info "undefined cmd" message]
+    :stop false
+    :connect (hz-connect send-fn (:config message))     ;(hz-client/connect (:config message))
+    :hz      (hz-cmd send-fn hz-handler (:args message)) ;(apply hz-client/cmd (conj (:args message) hz-conn))
+    (do (send-fn [:info "undefined hz :)" message]) hz-handler)
     ))
 
 (defn cmd-handler
   [^String erl-mbox ^String erl-node self]
   (send! self erl-mbox erl-node [:hzerl_node (keyword (:name self))])
   (send! self erl-mbox erl-node [:hzerl_mbox (keyword self-mbox)])
-  (println "exit from loop"
-   (loop [n true]
-     (let [message  (->>
-                     (recv self)
-                     vec-to-map)
-           pid (:pid message)]
-       (println "recv: " pid message)
-       (when-let [feedback (commands (vec-to-map (:hzcmd message)))]
-         (println "feed" feedback)
-         (send! self pid feedback)
-         (recur true))))
-   (System/exit 0)))
+  (loop [hz-handler true]
+    (when-not (false? hz-handler)
+      (let [message  (->>
+                      (recv self)
+                      vec-to-map)
+            pid (:pid message)
+            send-fn (partial send! self pid)
+            feedback (try (commands hz-handler send-fn (vec-to-map (:hzcmd message)))
+                          (catch Exception e
+                            (do
+                              (println (.getMessage e))
+                              hz-handler)))]
+        (println "recv: " pid message feedback)
+        (recur feedback))))
+  (System/exit 0))
 
 (defn -main 
   "main fun"

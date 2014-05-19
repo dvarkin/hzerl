@@ -74,7 +74,9 @@
     (nippy/thaw expr)))
 
 (defn cmd
-  [^HazelcastInstance conn ^Keyword hz-type ^String name hz-cmd & args]
-  (case hz-type 
-    :map (apply hz-cmd  (conj args (.getMap conn name)))
-    [:info "indefined type" hz-type name args]))
+  [^HazelcastInstance conn ^Keyword hz-type ^String name ^String hz-cmd & args]
+  (let [method-fn (ns-resolve 'hzerl.hz-type (symbol hz-cmd))]
+    (println "cmd" hz-cmd method-fn args)
+    (case hz-type 
+      :map (apply  method-fn  (conj args (.getMap conn name)))
+      [:info "indefined type" hz-type name args])))
