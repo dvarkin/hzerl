@@ -12,12 +12,13 @@ http://www.hazelcast.com/
 
 hzerl:start_link().
 
-Config = {user, UserName,
-                password, UserPassword,
-                hosts, ["localhost", "10.1.1.1"]
-                connAtemptLimit, 5 , %% unlimited by default
-                connAtemptPeriod, 3000,
-                connTimeout, 5000}.
+Config = {
+		  user, UserName,
+		  password, UserPassword,
+		  hosts, ["localhost", "10.1.1.1"]
+		  connAtemptLimit, 5 , %% unlimited by default
+		  connAtemptPeriod, 3000,
+		  connTimeout, 5000}.
 
 hzerl:connect(Config).
 

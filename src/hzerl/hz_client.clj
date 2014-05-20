@@ -10,6 +10,7 @@
    [com.hazelcast.client HazelcastClient HazelcastClientProxy]
    [java.util.concurrent TimeUnit]
    [java.io ByteArrayInputStream ByteArrayOutputStream]
+   [java.util.concurrent FutureTask]
    ))
 
 (def ^{:const true :doc "default constants for connection to Hazelcat cluster"}
@@ -24,7 +25,9 @@
 (extend-protocol ^{:doc "return list of node names in cluster"}
   ErlangProto
   HazelcastClientProxy
-  (encode [this] (->> this (.getCluster) (.getMembers) (map str) encode)))
+  (encode [this] (->> this (.getCluster) (.getMembers) (map str) encode))
+  FutureTask
+  (encode [this] (encode :ok)))
 
 (defn- get-defaults
   "return value from default-config var if it havent in args"
@@ -74,8 +77,8 @@
     (nippy/thaw expr)))
 
 (defn cmd
-  [^HazelcastInstance conn ^Keyword hz-type ^String name ^String hz-cmd & args]
-  (let [method-fn (ns-resolve 'hzerl.hz-type (symbol hz-cmd))]
-    (case hz-type 
-      :map (apply  method-fn  (conj args (.getMap conn name)))
-      [:info "indefined type" hz-type name args])))
+  [^HazelcastInstance conn ^Keyword method ^Keyword hz-type ^String name ^String hz-cmd & args]
+  (case hz-type 
+    :map (apply (ns-resolve 'hzerl.hz-type (symbol hz-cmd))
+                (conj args method (.getMap conn name)))
+    [:info "indefined type" hz-type name args]))

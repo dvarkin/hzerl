@@ -26,7 +26,7 @@
 		 terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE).
--define(JREQ(Method, Pid, Cmd), {method, Method, pid, Pid, hzcmd, Cmd}).
+-define(JREQ(Method, Pid, Cmd), {pid, Pid, hzcmd, Cmd}).
 -define(JAR_PATH, "/Users/dem/projecs/hzerl/target/hz.jar").
 
 -record(state, {port, cmd, hzerl_node, hzerl_mbox}).
@@ -39,9 +39,9 @@ reload() ->
 	code:load_file(?MODULE).
 
 hz_call(Cmd) ->
-	?MODULE:cmd_sync({cmd, hz, args, Cmd}).
+	?MODULE:cmd_sync({cmd, hz, args, [sync] ++ Cmd}).
 hz_cast(Cmd) ->
-	?MODULE:cmd_async({cmd, hz, args, Cmd}).
+	?MODULE:cmd_async({cmd, hz, args, [async] ++  Cmd}).
 
 cmd_async(Cmd) ->
 	gen_server:cast(?SERVER, {cmd, Cmd}).
@@ -103,7 +103,7 @@ init([JarPath]) ->
 	{registered_name, SelfName} = erlang:process_info(self(), registered_name),
 	Node = string:join(["-Derlang.node=", atom_to_list(node())], ""),
 	Mbox = string:join(["-Derlang.mbox=", atom_to_list(SelfName)], ""),
-	Cmd = string:join(["java -jar", Mbox, Node, JarPath], " "),
+	Cmd = string:join(["java -jar", "-Xmx5g", Mbox, Node, JarPath], " "),
 	io:format("start jar: ~s~n", [Cmd]),
 	Port = open_port({spawn, Cmd}, [binary, eof]),
 	{ok, #state{port = Port, cmd = Cmd}}.
@@ -128,7 +128,6 @@ handle_call({cmd, Cmd}, From, #state{hzerl_node = Node, hzerl_mbox = Mbox} = Sta
 				 receive
 					 Response ->
 						 Reply = Response,
-						 io:format("sync resp: ~p~n", [Reply]),
 						 gen_server:reply(From, Reply)
 				 after 5000 ->
 						 gen_server:reply(From, timeout)
@@ -160,7 +159,6 @@ handle_call(_Request, _From, State) ->
 %% 	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
 %% 	{stop, normal, State};
 handle_cast({cmd, Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
-	io:format("send to HZ ~p~n", [Cmd]),
 	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
 	{noreply, State};
 handle_cast(_Msg, State) ->
@@ -177,7 +175,6 @@ handle_cast(_Msg, State) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_info({Port, eof}, #state{port = Port} = State) ->
-	io:format("dirver closed!~n"),
 	{stop, dirver_closed,State};
 handle_info({Port, {data, Data}}, #state{port = Port} = State) ->
 	io:format("data from port driver: ~p", [Data]),
@@ -187,7 +184,7 @@ handle_info({hzerl_node, Node}, State) ->
 handle_info({hzerl_mbox, Mbox}, State) ->
 	{noreply, State#state{hzerl_mbox = Mbox}};
 handle_info(_Info, State) ->
-	io:format("info in ctrl: ~p", [_Info]),
+%	io:format("unexpected info in ctrl: ~p", [_Info]),
 	{noreply, State}.
 
 %%--------------------------------------------------------------------
