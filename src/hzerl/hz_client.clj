@@ -20,6 +20,7 @@
                   :connAtemptLimit Integer/MAX_VALUE
                   :connAtemptPeriod 2000
                   :connTimeout 5000
+                  :connPoolSize 100
                   })
 
 (extend-protocol ^{:doc "return list of node names in cluster"}
@@ -40,6 +41,7 @@
   (let [hosts               (get-defaults :hosts config)
         user                (get-defaults :user  config)
         pass                (get-defaults :password config)
+        conn-pool-size      (get-defaults :connPoolSize config)
         conn-atempt-limit   (get-defaults :connAtemptLimit config)
         conn-atempt-period  (get-defaults :connAtemptPeriod config)
         conn-timeout        (get-defaults :connTimeout config)
@@ -48,7 +50,10 @@
                  (.setAddresses hosts)
                  (.setConnectionAttemptLimit conn-atempt-limit)
                  (.setConnectionAttemptPeriod conn-atempt-period)
-                 (.setConnectionTimeout conn-timeout))]
+                 (.setConnectionTimeout conn-timeout)
+                 (.setConnectionPoolSize conn-pool-size)
+;                 (.setExecutorPoolSize 100)
+                 )]
     ;; auth config
     (->
      hz-cfg

@@ -154,10 +154,6 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-%%handle_cast({cmd, {cmd, stop} = Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
-%% 	io:format("STOP HZ ~p~n", [Cmd]),
-%% 	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
-%% 	{stop, normal, State};
 handle_cast({cmd, Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
 	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
 	{noreply, State};
