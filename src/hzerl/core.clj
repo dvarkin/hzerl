@@ -8,7 +8,7 @@
    [hzerl.hz-client :as hz-client :refer (connect)]
    [clojure.core.async :as async  :refer (>! chan <! <!! go )]
    [clj-pid.core    :as pid       :refer (current)])
-  (:import [clojure.lang Keyword])
+  (:import [clojure.lang Keyword PersistentArrayMap PersistentVector])
   (:gen-class))
 
 (def ^{:const true :private true} self-node "hzerlnode")
@@ -31,12 +31,16 @@
        (list self-node)
        (join "@" )))
 
-(defn vec-to-map
+(defn ^PersistentArrayMap vec-to-map
   "very bad solution, but must be for backward comp with erl16 and low, where no Maps"
-  [message]
+  [^PersistentVector message]
   (if (vector? message)
     (apply hash-map message)
     message))
+
+(defn make-send-fn
+  [self ^PersistentArrayMap  message]
+  (fn [response] (send! self (:pid message) response)))
 
 (defn hz-connect
   [send-fn config]
@@ -44,36 +48,32 @@
     (send-fn conn)
     (partial hz-client/cmd conn)))
 
+(defn wait-for-config
+  "wait for configuration message from erlang node. return make handler func"
+  [self]
+  (let [message (->> self recv vec-to-map)]
+    (if (= :connect  (:cmd message))
+      (hz-connect (make-send-fn self message) (-> message :config vec-to-map))
+      (recur self))))
+
 (defn hz-cmd
   [send-fn handler args]
   (->>  (apply handler args)
         send-fn)
   handler)
 
-(defn commands
-  [message hz-handler send-fn]
-  (case (:cmd message)
-    :stop false
-    :connect (hz-connect send-fn (:config message))     
-    :hz      (hz-cmd send-fn hz-handler (:args message)) 
-    (do (send-fn [:info "undefined hz cmd:)" message]) hz-handler)
-    ))
-
 (defn message-handler
-  [self hz-handler raw-message]
+  [self hz-client raw-message]
   (let [message  (vec-to-map raw-message)
-        method (:method message)
-        pid (:pid message)
-        send-fn (partial send! self pid)
-        cmd (:hzcmd message)]
+        method (:cmd message)
+        send-fn (make-send-fn self message)
+        args (-> message :args vec-to-map (conj method))]
     (try
-      (-> cmd
-          vec-to-map
-          (commands hz-handler send-fn))
+      (hz-cmd send-fn hz-client args)
       (catch Exception e
         (do
           (send-fn (str "error:" (.getMessage e)))
-          hz-handler)))))
+          hz-client)))))
 
 (defn chan-handler [handler ch]
   (while true
@@ -88,16 +88,17 @@
 
 (defn cmd-handler
   [^String erl-mbox ^String erl-node self]
+  ;; initital self info for erlang node
   (send! self erl-mbox erl-node [:hzerl_node (keyword (:name self))])
   (send! self erl-mbox erl-node [:hzerl_mbox (keyword self-mbox)])
   (send! self erl-mbox erl-node [:hzerl_pid  (pid/current)])
-
   (future (keep-alive self erl-node))
-  (let [chans (repeatedly 10 chan)]
-    (doseq [c chans] (go (chan-handler echo-handler c)))
+  (let [hz-client (wait-for-config self)
+        chans (repeatedly 10 chan)]
+    (doseq [c chans] (go (chan-handler message-handler c)))
     (while true
       (let [r (recv self)]
-        (go (>! (rand-nth chans) [self 1 r]))))
+        (go (>! (rand-nth chans) [self hz-client r]))))
     (System/exit 0)))
 
 (defn -main 

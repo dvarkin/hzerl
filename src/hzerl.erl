@@ -12,21 +12,20 @@
 
 %% API
 -export([start_link/0,
-		 cmd_sync/1,
-		 cmd_async/1,
-		 hz_cast/1,
-		 hz_call/1,
+		 hz_sync/1,
+		 hz_async/1,
 		 reload/0,
 		 stop/0,
 		 state/0,
-		 connect/1]).
+		 connect/0,
+		 connect/1,
+		 make_request/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 		 terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE).
--define(JREQ(Method, Pid, Cmd), {pid, Pid, hzcmd, Cmd}).
 -define(JAR_PATH, "/Users/dem/projecs/hzerl/target/hz.jar").
 
 -record(state, {port, cmd, hzerl_node, hzerl_mbox, hzerl_pid}).
@@ -38,26 +37,47 @@ reload() ->
 	code:purge(?MODULE),
 	code:load_file(?MODULE).
 
-stop_jar(Pid) ->
+stop_jar(Pid) when is_list(Pid) ->
 	KillCmd = "kill -9 " ++ Pid,
-	os:cmd(KillCmd).
+	os:cmd(KillCmd);
+stop_jar(_) ->
+	ok.
 
-hz_call(Cmd) ->
-	?MODULE:cmd_sync({cmd, hz, args, [sync] ++ Cmd}).
-hz_cast(Cmd) ->
-	?MODULE:cmd_async({cmd, hz, args, [async] ++  Cmd}).
+make_request(Pid, {cmd, _, _, _} = Cmd) when is_tuple(Cmd) ->
+	R = list_to_tuple([pid, Pid] ++ tuple_to_list(Cmd)),
+%	io:format("request: ~p~n", [R]),
+	R.
+	
 
-cmd_async(Cmd) ->
-	gen_server:cast(?SERVER, {cmd, Cmd}).
+%%--------------------------------------------------------------------
+%% @doc Config = {user, UserName,
+%%                password, UserPassword,
+%%                hosts, ["localhost", "10.1.1.1"]
+%%                connAtemptLimit, 5 , %% unlimited by default
+%%                connAtemptPeriod, 3000,
+%%                connTimeout, 5000}
+%% @spec
+%% @end
+%%--------------------------------------------------------------------
+connect() ->
+	gen_server:call(?SERVER,{cmd, connect, config, {}}).
 
-cmd_sync(Cmd) ->
-	gen_server:call(?SERVER, {cmd, Cmd}).
+connect([_|_] = Config) ->
+	gen_server:call(?SERVER,{cmd, connect, config, Config});
+connect(Config) ->
+	{error, {"not an emtpy list", Config}}.
+
+hz_sync(Cmd) ->
+	gen_server:call(?SERVER, {cmd, sync, args, Cmd}).
+
+hz_async(Cmd) ->
+	gen_server:call(?SERVER, {cmd, async, args, Cmd}).
 
 state() ->
 	gen_server:call(?SERVER, state).
 
 stop() ->
-	?MODULE:cmd_async({cmd, stop}).
+	gen_server:cast(?SERVER, stop).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -72,21 +92,6 @@ start_link(JarPath) ->
 	gen_server:start_link({local, ?SERVER}, ?MODULE, [JarPath], []).
 
 
-%%--------------------------------------------------------------------
-%% @doc Config = {user, UserName,
-%%                password, UserPassword,
-%%                hosts, ["localhost", "10.1.1.1"]
-%%                connAtemptLimit, 5 , %% unlimited by default
-%%                connAtemptPeriod, 3000,
-%%                connTimeout, 5000}
-%% @spec
-%% @end
-%%--------------------------------------------------------------------
-
-connect(Config) when is_tuple(Config) ->
-	?MODULE:cmd_sync({cmd, connect, config, Config});
-connect(Config) ->
-	{error, {"not a tuple", Config}}.
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -126,9 +131,15 @@ init([JarPath]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({cmd, Cmd}, From, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
+handle_call({cmd, _IntCmd, _HzCmd, _Args} = Cmd, From,
+			#state{hzerl_node = Node, hzerl_mbox = Mbox, hzerl_pid = Pid} = State)
+  when
+	  Node =/= undefined andalso
+	  Mbox =/= undefined andalso
+	  Pid  =/= undefined
+	  ->
 	Fn = fun() ->
-				 {Mbox, Node} ! ?JREQ(sync, self(), Cmd),
+				 {Mbox, Node} ! make_request(self(), Cmd),
 				 receive
 					 Response ->
 						 Reply = Response,
@@ -139,6 +150,9 @@ handle_call({cmd, Cmd}, From, #state{hzerl_node = Node, hzerl_mbox = Mbox} = Sta
 		 end,
 	spawn(Fn),
 	{noreply,State};
+handle_call({cmd, _Cmd}, _From, State) ->
+	Reply = {error, driver_not_ready},
+	{reply, Reply, State};
 
 handle_call(state, _From, State) ->
 	Reply = State,
@@ -157,14 +171,9 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast({cmd, {cmd,stop} = Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox, hzerl_pid = Pid} = State) ->
-	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
+handle_cast(stop , #state{hzerl_pid = Pid} = State)	->
 	stop_jar(Pid),
 	{stop, normal, State};
-
-handle_cast({cmd, Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
-	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
-	{noreply, State};
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
@@ -188,6 +197,7 @@ handle_info({hzerl_node, Node}, State) ->
 handle_info({hzerl_mbox, Mbox}, State) ->
 	{noreply, State#state{hzerl_mbox = Mbox}};
 handle_info({hzerl_pid, Pid}, State) ->
+	io:format("pid ~p~n", [Pid]),
 	{noreply, State#state{hzerl_pid = Pid}};
 handle_info(_Info, State) ->
 %	io:format("unexpected info in ctrl: ~p", [_Info]),
