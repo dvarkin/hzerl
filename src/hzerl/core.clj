@@ -6,7 +6,8 @@
    [clj-erl.node    :as node      :refer :all]
    [clj-erl.static  :as static    :refer :all]
    [hzerl.hz-client :as hz-client :refer (connect)]
-   [clojure.core.async :as async :refer (>! chan <! <!! go )])
+   [clojure.core.async :as async  :refer (>! chan <! <!! go )]
+   [clj-pid.core    :as pid       :refer (current)])
   (:import [clojure.lang Keyword])
   (:gen-class))
 
@@ -89,6 +90,8 @@
   [^String erl-mbox ^String erl-node self]
   (send! self erl-mbox erl-node [:hzerl_node (keyword (:name self))])
   (send! self erl-mbox erl-node [:hzerl_mbox (keyword self-mbox)])
+  (send! self erl-mbox erl-node [:hzerl_pid  (pid/current)])
+
   (future (keep-alive self erl-node))
   (let [chans (repeatedly 10 chan)]
     (doseq [c chans] (go (chan-handler echo-handler c)))

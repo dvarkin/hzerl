@@ -10,6 +10,7 @@
                  [com.hazelcast/hazelcast-client "3.1.7"]
                  [com.taoensso/nippy "2.5.2"]
                  [org.clojure/core.async "0.1.303.0-886421-alpha"]
+                 [clj-pid "0.1.1"]
                  ]
   :plugins [[lein-environ "0.5.0"]]
   :aot [hzerl.core]

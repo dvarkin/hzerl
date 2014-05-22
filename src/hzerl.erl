@@ -29,7 +29,7 @@
 -define(JREQ(Method, Pid, Cmd), {pid, Pid, hzcmd, Cmd}).
 -define(JAR_PATH, "/Users/dem/projecs/hzerl/target/hz.jar").
 
--record(state, {port, cmd, hzerl_node, hzerl_mbox}).
+-record(state, {port, cmd, hzerl_node, hzerl_mbox, hzerl_pid}).
 
 %%%===================================================================
 %%% API
@@ -37,6 +37,10 @@
 reload() ->
 	code:purge(?MODULE),
 	code:load_file(?MODULE).
+
+stop_jar(Pid) ->
+	KillCmd = "kill -9 " ++ Pid,
+	os:cmd(KillCmd).
 
 hz_call(Cmd) ->
 	?MODULE:cmd_sync({cmd, hz, args, [sync] ++ Cmd}).
@@ -153,6 +157,10 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_cast({cmd, {cmd,stop} = Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox, hzerl_pid = Pid} = State) ->
+	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
+	stop_jar(Pid),
+	{stop, normal, State};
 
 handle_cast({cmd, Cmd}, #state{hzerl_node = Node, hzerl_mbox = Mbox} = State) ->
 	{Mbox, Node} ! ?JREQ(async, self(), Cmd),
@@ -179,6 +187,8 @@ handle_info({hzerl_node, Node}, State) ->
 	{noreply, State#state{hzerl_node = Node}};
 handle_info({hzerl_mbox, Mbox}, State) ->
 	{noreply, State#state{hzerl_mbox = Mbox}};
+handle_info({hzerl_pid, Pid}, State) ->
+	{noreply, State#state{hzerl_pid = Pid}};
 handle_info(_Info, State) ->
 %	io:format("unexpected info in ctrl: ~p", [_Info]),
 	{noreply, State}.
@@ -194,7 +204,8 @@ handle_info(_Info, State) ->
 %% @spec terminate(Reason, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
-terminate(_Reason, _State) ->
+terminate(_Reason, #state{hzerl_pid = Pid} ) ->
+	stop_jar(Pid),
 	ok.
 
 %%--------------------------------------------------------------------
