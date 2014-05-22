@@ -71,7 +71,7 @@ hz_sync(Cmd) ->
 	gen_server:call(?SERVER, {cmd, sync, args, Cmd}).
 
 hz_async(Cmd) ->
-	gen_server:call(?SERVER, {cmd, async, args, Cmd}).
+	gen_server:cast(?SERVER, {cmd, async, args, Cmd}).
 
 state() ->
 	gen_server:call(?SERVER, state).
@@ -171,6 +171,15 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_cast({cmd, _IntCmd, _HzCmd, _Args} = Cmd,
+			#state{hzerl_node = Node, hzerl_mbox = Mbox, hzerl_pid = Pid} = State)
+  when
+	  Node =/= undefined andalso
+	  Mbox =/= undefined andalso
+	  Pid  =/= undefined
+	  ->
+	{Mbox, Node} ! make_request(self(), Cmd),
+	{noreply,State};
 handle_cast(stop , #state{hzerl_pid = Pid} = State)	->
 	stop_jar(Pid),
 	{stop, normal, State};

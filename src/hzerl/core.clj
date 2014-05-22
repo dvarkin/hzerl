@@ -59,21 +59,21 @@
 (defn hz-cmd
   [send-fn handler args]
   (->>  (apply handler args)
-        send-fn)
-  handler)
+        send-fn))
 
 (defn message-handler
   [self hz-client raw-message]
   (let [message  (vec-to-map raw-message)
         method (:cmd message)
-        send-fn (make-send-fn self message)
         args (-> message :args vec-to-map (conj method))]
     (try
-      (hz-cmd send-fn hz-client args)
+      (if (= :sync method)
+        (->>
+         (apply hz-client args)
+         (send! self (:pid  message) ))
+        (apply hz-client args))
       (catch Exception e
-        (do
-          (send-fn (str "error:" (.getMessage e)))
-          hz-client)))))
+        (println (str "error:" (.getMessage e)))))))
 
 (defn chan-handler [handler ch]
   (while true
