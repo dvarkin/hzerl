@@ -24,11 +24,15 @@ hzerl:connect(Config).
 
 %%% Async operations
 
-hzerl:hz_cast([map, "custom", "SET", "1", "b"]).
+hzerl:hz_async([map, "custom", "SET", "1", "b"]).
 
 %%% Sync operations 
 
-hzerl:hz_call([map, "custom", 'GET', "1"]).
+hzerl:hz_sync([map, "custom", 'GET', "1"]).
+
+%%% close connection
+
+hzerl:stop().
 
 ```
 
