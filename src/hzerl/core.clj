@@ -6,7 +6,7 @@
    [clj-erl.node    :as node      :refer :all]
    [clj-erl.static  :as static    :refer :all]
    [hzerl.hz-client :as hz-client :refer (connect)]
-   [clojure.core.async :as async  :refer (>! chan <! <!! go )]
+   [clojure.core.async :as async  :refer (>!! >! chan <! <!! go thread)]
    [clj-pid.core    :as pid       :refer (current)])
   (:import [clojure.lang Keyword PersistentArrayMap PersistentVector])
   (:gen-class))
@@ -95,10 +95,10 @@
   (future (keep-alive self erl-node))
   (let [hz-client (wait-for-config self)
         chans (repeatedly 10 chan)]
-    (doseq [c chans] (go (chan-handler message-handler c)))
+    (doseq [c chans] (thread (chan-handler message-handler c)))
     (while true
       (let [r (recv self)]
-        (go (>! (rand-nth chans) [self hz-client r]))))
+        (thread (>!! (rand-nth chans) [self hz-client r]))))
     (System/exit 0)))
 
 (defn -main 

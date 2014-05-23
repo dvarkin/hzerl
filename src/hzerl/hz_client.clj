@@ -20,7 +20,7 @@
                   :connAtemptLimit Integer/MAX_VALUE
                   :connAtemptPeriod 2000
                   :connTimeout 5000
-                  :connPoolSize 100
+                  :connPoolSize 1000
                   })
 
 (extend-protocol ^{:doc "return list of node names in cluster"}
